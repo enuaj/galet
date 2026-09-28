@@ -297,7 +297,7 @@ function toast(t) {
   clearTimeout(toastT); toastT = setTimeout(() => d.remove(), 2600);
 }
 function openModal(html) { document.getElementById("modal").innerHTML = '<div class="overlay" data-a="modal-bg"><div class="sheet">' + html + "</div></div>"; }
-function closeModal() { document.getElementById("modal").innerHTML = ""; }
+function closeModal() { if (typeof stopMove === "function") stopMove(); document.getElementById("modal").innerHTML = ""; }
 let actx = null;
 function beep(freq, dur) {
   try {
@@ -469,6 +469,30 @@ function vHome() {
   <input type="file" id="photo-in" accept="image/*" hidden>`;
 }
 
+/* ---------- Aide visuelle : schéma + vidéo ---------- */
+const IC_FIG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="2.5"/><path d="M12 8v6M12 14l-4 6M12 14l4 6M6 11l6-1 6 1"/></svg>';
+const IC_PLAY = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="2.5" y="5" width="19" height="14" rx="4"/><path d="M10 9.5v5l4.5-2.5z" fill="currentColor"/></svg>';
+function helpBtns(ex, v) {
+  return `<span class="help"><button data-a="demo" data-v="${ex}:${v}" aria-label="Voir le schéma du mouvement">${IC_FIG}</button><button data-a="yt" data-v="${ex}:${v}" aria-label="Voir une démo vidéo">${IC_PLAY}</button></span>`;
+}
+function showDemo(key) {
+  const [ex, v] = key.split(":"); const c = CATALOG[ex], vr = c.variants[+v];
+  openModal(`<div class="row between"><h3 style="margin:0">${vr.n}</h3><button class="btn small ghost" data-a="close-modal">Fermer</button></div>
+  <div class="movebox"><svg id="mv-svg" viewBox="0 -8 200 134" role="img" aria-label="Schéma animé : ${esc(vr.n)}"></svg></div>
+  <p class="center small" style="margin:-4px 0 8px"><span class="pill accent" id="mv-ph">Départ</span></p>
+  <p class="small">${vr.cue}</p>
+  <button class="btn ghost" data-a="yt" data-v="${key}">${IC_PLAY.replace("<svg", '<svg style="width:18px;height:18px;vertical-align:-4px;margin-right:6px"')}Voir une démo vidéo</button>`);
+  playMove(document.getElementById("mv-svg"), key, document.getElementById("mv-ph"));
+}
+let YT_OUT = null;
+function askYouTube(key) {
+  const [ex, v] = key.split(":"); const vr = CATALOG[ex].variants[+v];
+  openModal(`<div class="hero" style="margin-bottom:6px">${mascot("wow")}<div class="bubble">Une démo, et tu reviens vite !</div></div>
+  <div class="warn-box">⚠️ YouTube est fait pour te garder : vidéos suggérées, lecture automatique, Shorts… Regarde <b>une</b> démo de <b>${vr.n}</b> (1 à 2 min), puis reviens ici. Ta séance t'attend.</div>
+  <a class="btn primary" style="display:block;text-align:center;text-decoration:none" href="${ytUrl(key)}" target="_blank" rel="noopener" data-a="yt-go">Ouvrir YouTube</a>
+  <button class="btn ghost" style="margin-top:8px" data-a="close-modal">Rester ici</button>`);
+}
+
 /* ---------- Séance ---------- */
 function vSession() {
   if (S.current && S.current.finished) return vSummary();
@@ -477,7 +501,7 @@ function vSession() {
   const vol = items.reduce((a, it) => a + it.sets, 0);
   return `<h1>Séance ${type}</h1><p class="muted" style="margin-top:-8px">${PLAN[type].name} · ${items.length} exercices · ${vol} séries · ≈ 15–20 min</p>
   <div class="seg" style="margin:8px 0 14px"><button data-a="stype" data-v="A" class="${type === "A" ? "on" : ""}">A · Haut</button><button data-a="stype" data-v="B" class="${type === "B" ? "on" : ""}">B · Bas</button></div>
-  <div class="card exlist">${items.map((it, i) => { const c = CATALOG[it.ex]; return `<div class="it"><div class="num">${i + 1}</div><div><b>${c.variants[it.v].n}</b>${it.carry ? ' <span class="pill warn">rattrapage</span>' : ""}<div class="tiny muted">${c.name}</div></div><div class="tgt">${tgtLabel(it.ex, it)}</div></div>`; }).join("")}</div>
+  <div class="card exlist">${items.map((it, i) => { const c = CATALOG[it.ex]; return `<div class="it"><div class="num">${i + 1}</div><div style="flex:1"><b>${c.variants[it.v].n}</b>${it.carry ? ' <span class="pill warn">rattrapage</span>' : ""}<div class="tiny muted">${c.name} · <b style="color:var(--ink)">${tgtLabel(it.ex, it)}</b></div></div>${helpBtns(it.ex, it.v)}</div>`; }).join("")}</div>
   <p class="small muted">Échauffement conseillé : 2 min de montées de genoux, rotations d'épaules et de hanches. Repos entre séries : ${S.settings.rest} s.</p>
   <button class="btn primary" data-a="start" data-v="${type}">Démarrer la séance</button>`;
 }
@@ -488,7 +512,7 @@ function vRunner() {
   <div class="bar" style="margin:8px 0 16px"><i style="width:${cur.idx / cur.items.length * 100}%"></i></div>
   <div class="card center">
     ${it.carry ? '<span class="pill warn">rattrapage</span>' : ""}
-    <h1 style="margin:8px 0 2px">${vr.n}</h1><p class="muted small">${vr.cue}</p>
+    <h1 style="margin:8px 0 2px">${vr.n}</h1><p class="muted small">${vr.cue}</p><div style="margin:6px 0 0">${helpBtns(it.ex, it.v).replace('class="help"', 'class="help" style="gap:10px"')}</div>
     <div class="big">${it.sets} × ${it.reps}${isSec ? '<span style="font-size:28px"> s</span>' : ""}</div>
     ${c.side ? '<p class="small muted" style="margin-top:-8px">de chaque côté</p>' : ""}
     <div class="dots">${Array.from({ length: it.sets }, (_, i) => `<i class="${i < it.setsDone ? "on" : ""}"></i>`).join("")}</div>
@@ -755,6 +779,10 @@ document.addEventListener("click", async ev => {
       else startTimer(it.reps, "Tiens bon", "Série " + (it.setsDone + 1) + " / " + it.sets, afterSet);
       break;
     }
+    case "demo": showDemo(v); break;
+    case "yt": askYouTube(v); break;
+    case "yt-go": YT_OUT = Date.now(); setTimeout(closeModal, 300); return;
+    case "close-modal": closeModal(); break;
     case "tm-add": if (TIMER) TIMER.end += 15000; break;
     case "tm-skip": finishTimer(false); break;
     case "ask": askResult(); break;
@@ -790,4 +818,9 @@ load();
 if (S.profile) { applyFreezes(); UI.comeback = checkComeback(); }
 render();
 if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
-document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && S.profile && S.lastCheck !== today()) { applyFreezes(); render(); } });
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && YT_OUT) {
+    const min = Math.round((Date.now() - YT_OUT) / 60000); YT_OUT = null;
+    if (min >= 5) toast("Te revoilà après " + min + " min sur YouTube. On reprend ?");
+    else toast("Bon retour ! On reprend 💪");
+  } if (document.visibilityState === "visible" && S.profile && S.lastCheck !== today()) { applyFreezes(); render(); } });
